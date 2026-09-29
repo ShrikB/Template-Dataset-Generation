@@ -1,0 +1,10 @@
+docs/
+node_modules/
+old/
+dist/
+tests/
+CLAUDE.md
+package-lock.json
+package.json
+vite.config.js
+vitest.config.js

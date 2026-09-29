@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "bldg_house",
+      "name": "House",
+      "category": "buildings",
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='9'%20y='12'%20width='22'%20height='20'%20fill='%23c65d3b'/%3E%3Cpolygon%20points='9,12%2020,4%2031,12'%20fill='%23e08a6a'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "bldg_work",
+      "name": "Work Building",
+      "category": "buildings",
+      "footprint": {
+        "width": 20,
+        "depth": 25
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='8'%20y='5'%20width='24'%20height='31'%20fill='%23c65d3b'/%3E%3Crect%20x='12'%20y='9'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='18'%20y='9'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='24'%20y='9'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='12'%20y='16'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='18'%20y='16'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='24'%20y='16'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='12'%20y='23'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='18'%20y='23'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='24'%20y='23'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='17'%20y='29'%20width='6'%20height='7'%20fill='%23f2c9b6'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "prop_oak_tree",
+      "name": "Tree",
+      "category": "props",
+      "footprint": {
+        "width": 5.0,
+        "depth": 5.0
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='18'%20y='22'%20width='4'%20height='12'%20fill='%238a5a3c'/%3E%3Ccircle%20cx='20'%20cy='16'%20r='11'%20fill='%233f9d63'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "prop_park_bench",
+      "name": "Bench",
+      "category": "props",
+      "footprint": {
+        "width": 1.0,
+        "depth": 4.0
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='8'%20y='18'%20width='24'%20height='4'%20fill='%233f9d63'/%3E%3Crect%20x='10'%20y='22'%20width='3'%20height='8'%20fill='%233f9d63'/%3E%3Crect%20x='27'%20y='22'%20width='3'%20height='8'%20fill='%233f9d63'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "prop_street_lamp",
+      "name": "Lamp",
+      "category": "props",
+      "footprint": {
+        "width": 0.5,
+        "depth": 0.5
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='19'%20y='10'%20width='2'%20height='24'%20fill='%237d848f'/%3E%3Ccircle%20cx='20'%20cy='9'%20r='5'%20fill='%23c6a13b'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "person_pedestrian",
+      "name": "Pedestrian",
+      "category": "people",
+      "footprint": {
+        "width": 1.0,
+        "depth": 1.0
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Ccircle%20cx='20'%20cy='12'%20r='5'%20fill='%23c6a13b'/%3E%3Crect%20x='15'%20y='18'%20width='10'%20height='16'%20rx='3'%20fill='%23c6a13b'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "vehicle_sedan",
+      "name": "Sedan",
+      "category": "vehicles",
+      "footprint": {
+        "width": 5.5,
+        "depth": 8.0
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='6'%20y='15'%20width='28'%20height='12'%20rx='3'%20fill='%233b78c6'/%3E%3Crect%20x='12'%20y='10'%20width='16'%20height='8'%20rx='2'%20fill='%235a94dd'/%3E%3C/svg%3E"
+    },
+    {
+      "id": "vehicle_delivery_van",
+      "name": "Delivery Van",
+      "category": "vehicles",
+      "footprint": {
+        "width": 6.0,
+        "depth": 10.0
+      },
+      "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='6'%20y='10'%20width='24'%20height='18'%20rx='2'%20fill='%233b78c6'/%3E%3Crect%20x='28'%20y='16'%20width='8'%20height='12'%20rx='1'%20fill='%235a94dd'/%3E%3C/svg%3E"
+    }
+  ],
+  "roadStyles": {
+    "surfaces": [
+      {
+        "id": "asphalt",
+        "name": "Asphalt",
+        "color": "#7d848f"
+      },
+      {
+        "id": "dirt",
+        "name": "Dirt",
+        "color": "#8a6d4b"
+      }
+    ],
+    "centerLines": [
+      {
+        "id": "solid",
+        "name": "Solid"
+      },
+      {
+        "id": "dashed",
+        "name": "Dashed"
+      },
+      {
+        "id": "double-yellow",
+        "name": "Double yellow"
+      }
+    ],
+    "markingFeatures": [
+      {
+        "id": "laneDividers",
+        "name": "Lane dividers"
+      },
+      {
+        "id": "crosswalk",
+        "name": "Crosswalk"
+      },
+      {
+        "id": "stopLine",
+        "name": "Stop line"
+      }
+    ]
+  }
+}

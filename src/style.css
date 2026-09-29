@@ -1,0 +1,602 @@
+:root {
+  --bg: #14161a;
+  --panel: #1b1e24;
+  --panel-2: #22262e;
+  --border: #2f343d;
+  --text: #d7dbe2;
+  --text-dim: #8a94a3;
+  --accent: #4b9fd6;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 220px 1fr 240px;
+  grid-template-areas:
+    "toolbar toolbar toolbar"
+    "palette canvas   inspector";
+  height: 100%;
+}
+
+.toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar h1 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 8px 0 0;
+  white-space: nowrap;
+}
+
+.toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+}
+
+.toolbar select,
+.toolbar button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toolbar .spacer { flex: 1; }
+
+.tool-switch {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.tool-btn {
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  border-radius: 3px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tool-btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: #0d0f13;
+}
+
+.select-controls,
+.history-controls,
+.scatter-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.select-controls[hidden],
+.scatter-controls[hidden] {
+  display: none;
+}
+
+.scatter-controls input[type="number"] {
+  width: 4.5em;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+}
+
+.select-controls button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.readout {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#tool-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#readout { flex: 0 0 auto; }
+
+.panel {
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.panel-left { grid-area: palette; border-right: 1px solid var(--border); }
+.panel-right { grid-area: inspector; border-left: 1px solid var(--border); }
+
+.panel-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+
+.canvas-wrap {
+  grid-area: canvas;
+  position: relative;
+  overflow: hidden;
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+
+#canvas.panning { cursor: grabbing; }
+
+/* Road options (FR-5, FR-6, FR-9) - takes over the left panel from the asset
+   palette while the Road tool is active, so it stacks vertically rather than
+   sitting inline in the toolbar. */
+.road-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.road-panel[hidden] { display: none; }
+
+.road-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.road-panel-group[hidden] { display: none; }
+
+.road-panel .tool-switch { margin-bottom: 4px; }
+
+.road-panel .tool-switch .tool-btn { flex: 1; }
+
+.road-panel-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: var(--text-dim);
+}
+
+.road-panel-field input[type="number"] {
+  width: 6em;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+}
+
+.road-panel button:not(.tool-btn) {
+  width: 100%;
+  text-align: left;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.road-panel button:not(.tool-btn):hover:not(:disabled) { border-color: #454c58; }
+
+.road-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.road-panel .panel-group-title { margin: 8px 0 2px; }
+
+.palette-group { margin-bottom: 14px; }
+
+.palette-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin: 0 0 6px;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 7px;
+  margin-bottom: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-item:hover { border-color: #454c58; }
+
+.palette-item[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: #24333f;
+}
+
+.palette-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  flex: 0 0 auto;
+}
+
+.palette-empty { color: var(--text-dim); }
+
+.inspector-placeholder { color: var(--text-dim); }
+
+.panel-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  word-break: break-all;
+}
+
+.inspector-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-dim);
+}
+
+.inspector-field input[type="checkbox"] {
+  width: auto;
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.inspector-field input[type="number"],
+.inspector-field select {
+  width: 8.5em;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font: inherit;
+}
+
+.inspector-row button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.inspector-row input[type="number"] { width: 4.5em; }
+
+.inspector-summary {
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+
+.inspector-action {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.inspector-action:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.inspector-delete { background: #3a2226; color: #e0a0a0; border-color: #5a3038; }
+.inspector-delete:hover { border-color: #7a3f4a; }
+
+.inspector-flatten { margin-top: 10px; background: #22303a; color: #a0c8e0; border-color: #30485a; }
+.inspector-flatten:hover:not(:disabled) { border-color: #3f6a7a; }
+
+/* --- Export dialog (FR-25, FR-26, FR-27) -------------------------------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 9, 11, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-box {
+  width: min(420px, 92vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-field {
+  display: block;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+
+.modal-field input[type="text"] {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font: inherit;
+}
+
+.modal-field-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.modal-actions button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+#export-confirm-btn {
+  background: var(--accent);
+  color: #0d0f13;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.export-summary {
+  background: #1e2f22;
+  border: 1px solid #2e4a37;
+  color: #a8d9b6;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin: 10px 0 0;
+}
+
+/* --- Validation panel (FR-21, FR-22) ------------------------------------- */
+
+.validation-panel {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.validation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.validation-summary {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.validation-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.validation-dismiss:hover { color: var(--text); }
+
+.validation-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.validation-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}
+
+.validation-item:first-child { border-top: none; }
+
+.validation-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.validation-error .validation-badge {
+  background: #3a2226;
+  color: #e0a0a0;
+}
+
+.validation-warning .validation-badge {
+  background: #3a3320;
+  color: #e0cf9a;
+}
+
+/* Greyed-out controls - e.g. everything but Finish/Cancel while a road path
+   is being drawn (see updateRoadDraftLock in main.js). */
+.toolbar button:disabled,
+.tool-btn:disabled,
+.palette-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tool-btn[aria-pressed="true"]:disabled {
+  opacity: 0.6;
+}
+
+.palette-item:disabled:hover { border-color: var(--border); }
+
+/* --- Keyboard shortcut reference (FR-32) -------------------------------- */
+
+.shortcut-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin: 14px 0 6px;
+}
+
+.shortcut-group-title:first-child { margin-top: 0; }
+
+.shortcut-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0;
+}
+
+.shortcut-keys {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.shortcut-desc {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+/* --- Layers panel (FR-19) ----------------------------------------------- */
+
+.layers-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.layer-row {
+  display: grid;
+  grid-template-columns: 1fr 3.2em 3.2em;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.layer-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+
+.layer-name { color: var(--text-dim); }
+
+.layer-flag {
+  display: flex;
+  justify-content: center;
+}
+
+/* --- Canvas size dialog (FR-2) ------------------------------------------ */
+
+.canvas-warning {
+  background: #3a2226;
+  border: 1px solid #5a3038;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  color: #e0a0a0;
+}
+
+.canvas-warning[hidden] { display: none; }
+
+.canvas-warning-text { margin: 0 0 6px; }
+
+.canvas-warning-list {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 9em;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.canvas-warning-more { list-style: none; margin-left: -18px; opacity: 0.8; }
