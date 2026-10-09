@@ -1,0 +1,253 @@
+{
+  "formatVersion": "placeholder-1",
+  "generatedAt": "2026-10-09T18:56:20.255Z",
+  "manifestVersion": 1,
+  "conventions": {
+    "units": {
+      "length": "meters",
+      "rotation": "degrees"
+    },
+    "axes": {
+      "origin": "the canvas corner that is bottom-left in a top-down view",
+      "x": "+X is right (east) in a top-down view; the canvas spans 0..canvas.width",
+      "y": "+Y is up (north) in a top-down view, away from the default front-view camera; the canvas spans 0..canvas.depth",
+      "z": "+Z is up (Blender world up); the file carries no Z coordinates - everything stands on the ground plane",
+      "rotation": "degrees counter-clockwise about +Z seen from above, normalized to [0, 360); at 0 an entity's local X (footprint width) runs along world +X and its local Y (footprint depth) along world +Y"
+    },
+    "anchors": {
+      "buildings, props, vehicles, people": "x, y is the footprint center; the footprint rotates about it",
+      "scatterRegions": "x, y is the center of an axis-aligned width x depth rectangle (never rotated)",
+      "base": "x, y is the center of an axis-aligned width x depth rectangle (never rotated)",
+      "roads, junctions": "absolute points - no anchor"
+    },
+    "sizes": {
+      "footprint": "final top-down size in meters, footprintScale already applied - never null (a variant with no manifest footprint is resolved to the editor default here)",
+      "footprintScale": "the multiplier the editor applied to the variant's footprint; informational - already included in footprint",
+      "height": "buildings only: absolute height in meters; NOT multiplied by footprintScale"
+    },
+    "roads": {
+      "points": "ordered centerline polyline, straight segments only",
+      "width": "full road width in meters (edge to edge), one value per path",
+      "laneWidth": "meters; spacing of lane dividers when markings.laneDividers is on",
+      "surface": "manifest roadStyles.surfaces id",
+      "markings": "centerLine is a manifest roadStyles.centerLines id or \"none\"; laneDividers/crosswalk/stopLine are on/off manifest roadStyles.markingFeatures; crosswalk and stopLine sit at the LAST point of the path"
+    },
+    "junctions": {
+      "connectionTolerance": 0.000001,
+      "connectionToleranceNote": "meters; road points within this distance are the same location",
+      "attachments": "one per place a road meets the junction: kind \"vertex\" = on points[pointIndex]; kind \"segment\" = partway along segment segmentIndex (points[i] -> points[i+1]); distanceAlongPath = meters from points[0] along the path"
+    },
+    "scatterRegions": {
+      "count": "exact number of instances to generate (an absolute count, not a density)",
+      "variantIds": "manifest asset ids to pick from uniformly at random; an empty list means any manifest asset in the region's category",
+      "instanceFootprint": "the largest manifest footprint among the pool; the default below when no pool asset has one",
+      "defaultInstanceFootprint": {
+        "width": 1,
+        "depth": 1
+      },
+      "placement": "instance centers uniformly random within the region inset by half the instance footprint on each side, so whole instances stay inside; on an axis where the region is smaller than the footprint, centers sit on the region's center line",
+      "validPlacement": "a candidate center is rejected when it falls inside any building/prop/vehicle/person footprint in this file (rotated rect); a vehicles-category center must lie on a road strip (within width/2 of the centerline, including the round end caps); every other category must not",
+      "overlapTest": "point-in-footprint: only the instance center is tested, not its own footprint",
+      "instanceOverlap": "scattered instances are not tested against each other, within or across regions",
+      "attempts": "rejected candidates are redrawn, up to 30 candidates per requested instance in total; a region may yield fewer than count instances (zero for a vehicles region no road reaches into - reported as a scatter-vehicles-no-road warning)",
+      "rotation": "uniformly random in [0, 360) per instance",
+      "randomization": "regenerated on every import - no seed (FR-18)"
+    },
+    "warnings": "non-blocking validation warnings at export time (FR-22); message is the editor's text, in editor coordinates - use the structured fields",
+    "previewImage": "optional: the filename of a PNG snapshot of the editor view, downloaded as a separate file next to this one (not embedded); absent when no preview was requested"
+  },
+  "canvas": {
+    "width": 120,
+    "depth": 80
+  },
+  "base": {
+    "x": 67.22495894909687,
+    "y": 41.773399014778335,
+    "width": 102.74220032840722,
+    "depth": 59.91789819376025,
+    "thickness": 0.2
+  },
+  "buildings": [
+    {
+      "type": "building",
+      "id": "bldg_2",
+      "variantId": "bldg_house",
+      "x": 30.311986863711002,
+      "y": 57.30049220994971,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "height": 10
+    },
+    {
+      "type": "building",
+      "id": "bldg_3",
+      "variantId": "bldg_house",
+      "x": 104.66338259441709,
+      "y": 59.79638711963773,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "height": 10
+    },
+    {
+      "type": "building",
+      "id": "bldg_4",
+      "variantId": "bldg_house",
+      "x": 66.56814449917898,
+      "y": 57.69458087990045,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "height": 10
+    },
+    {
+      "type": "building",
+      "id": "bldg_5",
+      "variantId": "bldg_house",
+      "x": 34.252873563218394,
+      "y": 31.422002883184526,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "height": 10
+    },
+    {
+      "type": "building",
+      "id": "bldg_6",
+      "variantId": "bldg_house",
+      "x": 66.04269293924466,
+      "y": 29.320196643447247,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "height": 10
+    },
+    {
+      "type": "building",
+      "id": "bldg_7",
+      "variantId": "bldg_house",
+      "x": 108.21018062397373,
+      "y": 29.97701109336515,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 10,
+        "depth": 12
+      },
+      "height": 10
+    }
+  ],
+  "props": [
+    {
+      "type": "prop",
+      "id": "prop_8",
+      "variantId": "prop_oak_tree",
+      "x": 35.17241379310345,
+      "y": 44.55829188154249,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 5,
+        "depth": 5
+      }
+    },
+    {
+      "type": "prop",
+      "id": "prop_9",
+      "variantId": "prop_oak_tree",
+      "x": 55.79638752052545,
+      "y": 45.21510633146038,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 5,
+        "depth": 5
+      }
+    },
+    {
+      "type": "prop",
+      "id": "prop_10",
+      "variantId": "prop_oak_tree",
+      "x": 78.39080459770115,
+      "y": 42.981937201739534,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 5,
+        "depth": 5
+      }
+    },
+    {
+      "type": "prop",
+      "id": "prop_11",
+      "variantId": "prop_oak_tree",
+      "x": 101.11658456486043,
+      "y": 43.63875165165743,
+      "rotation": 0,
+      "footprintScale": 1,
+      "footprint": {
+        "width": 5,
+        "depth": 5
+      }
+    }
+  ],
+  "vehicles": [],
+  "people": [],
+  "roads": [
+    {
+      "type": "road",
+      "id": "road_1",
+      "points": [
+        {
+          "x": 24.137931034482758,
+          "y": 66.73234811165845
+        },
+        {
+          "x": 113.5960591133005,
+          "y": 66.20689655172414
+        },
+        {
+          "x": 112.9392446633826,
+          "y": 16.814449917898195
+        },
+        {
+          "x": 20.85385878489327,
+          "y": 18.25944170771757
+        },
+        {
+          "x": 24.137931034482758,
+          "y": 66.73234811165845
+        }
+      ],
+      "width": 6,
+      "laneWidth": 3.5,
+      "surface": "asphalt",
+      "markings": {
+        "centerLine": "none",
+        "laneDividers": false,
+        "crosswalk": false,
+        "stopLine": false
+      }
+    }
+  ],
+  "junctions": [],
+  "scatterRegions": [],
+  "warnings": [],
+  "previewImage": "test.png"
+}

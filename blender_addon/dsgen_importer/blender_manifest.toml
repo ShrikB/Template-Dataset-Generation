@@ -1,0 +1,16 @@
+schema_version = "1.0.0"
+
+id = "dsgen_importer"
+version = "0.1.0"
+name = "DSGen Layout Importer"
+tagline = "Build a city block from a DSGen web editor layout export"
+maintainer = "ShrikB"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+# Add-ons that use Blender's Python API must be GPL-compatible.
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+files = "Read the layout JSON exported by the DSGen web editor"
