@@ -72,19 +72,20 @@ export class ExportDialog extends Modal {
       ? await canvasPng(this.canvasEl)
       : null;
 
-    const result = prepareExport(this.project, issues, {
-      // The payload only names the PNG; downloadExport saves it alongside.
-      previewImageFilename: previewImage ? previewImageFilenameFor(filename) : null,
-      manifest: this.manifest, // sizes each entity's footprint for the base slab
-    });
-    if (result.blocked) {
-      // The validation panel above already shows the blocking error(s) -
-      // nothing else to do, export simply doesn't happen (FR-22).
-      return;
-    }
-
     // Surface a failure rather than leaving the dialog looking like it worked.
+    let result;
     try {
+      result = prepareExport(this.project, issues, {
+        // The payload only names the PNG; downloadExport saves it alongside.
+        previewImageFilename: previewImage ? previewImageFilenameFor(filename) : null,
+        // the file's library is copied from it, and it sizes every footprint
+        manifest: this.manifest,
+      });
+      if (result.blocked) {
+        // The validation panel above already shows the blocking error(s) -
+        // nothing else to do, export simply doesn't happen (FR-22).
+        return;
+      }
       downloadExport(result.payload, filename, { previewImage });
     } catch (err) {
       this.summaryEl.hidden = false;

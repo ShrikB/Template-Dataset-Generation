@@ -24,6 +24,10 @@ export const DEFAULT_BASE_MARGIN_M = 2;
 // Slab depth in meters — a typical concrete pad, not a structural raft.
 export const DEFAULT_BASE_THICKNESS_M = 0.2;
 
+// The material the slab is given in an export (Document 2 §11): the id of a
+// `ground`-kind material in the asset manifest's `materials` section.
+export const BASE_MATERIAL_ID = 'ground';
+
 /**
  * The axis-aligned extent of everything placed in the layout, in meters, or
  * null when nothing is placed at all.

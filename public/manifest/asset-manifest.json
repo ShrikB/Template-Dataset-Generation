@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "assets": [
     {
       "id": "bldg_house",
@@ -8,6 +8,18 @@
       "footprint": {
         "width": 10,
         "depth": 12
+      },
+      "source": {
+        "kind": "procedural",
+        "generator": "simple_building",
+        "params": {
+          "floorHeight": 3,
+          "windowSpacing": 3
+        }
+      },
+      "fallback": {
+        "shape": "box",
+        "color": "#c65d3b"
       },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='9'%20y='12'%20width='22'%20height='20'%20fill='%23c65d3b'/%3E%3Cpolygon%20points='9,12%2020,4%2031,12'%20fill='%23e08a6a'/%3E%3C/svg%3E"
     },
@@ -19,6 +31,18 @@
         "width": 20,
         "depth": 25
       },
+      "source": {
+        "kind": "procedural",
+        "generator": "simple_building",
+        "params": {
+          "floorHeight": 3,
+          "windowSpacing": 3
+        }
+      },
+      "fallback": {
+        "shape": "box",
+        "color": "#c65d3b"
+      },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='8'%20y='5'%20width='24'%20height='31'%20fill='%23c65d3b'/%3E%3Crect%20x='12'%20y='9'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='18'%20y='9'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='24'%20y='9'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='12'%20y='16'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='18'%20y='16'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='24'%20y='16'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='12'%20y='23'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='18'%20y='23'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='24'%20y='23'%20width='4'%20height='4'%20fill='%23f2c9b6'/%3E%3Crect%20x='17'%20y='29'%20width='6'%20height='7'%20fill='%23f2c9b6'/%3E%3C/svg%3E"
     },
     {
@@ -28,6 +52,15 @@
       "footprint": {
         "width": 5.0,
         "depth": 5.0
+      },
+      "source": {
+        "kind": "file",
+        "path": "props/oak_tree"
+      },
+      "fallback": {
+        "shape": "cylinder",
+        "color": "#3c9650",
+        "height": 6
       },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='18'%20y='22'%20width='4'%20height='12'%20fill='%238a5a3c'/%3E%3Ccircle%20cx='20'%20cy='16'%20r='11'%20fill='%233f9d63'/%3E%3C/svg%3E"
     },
@@ -39,6 +72,15 @@
         "width": 1.0,
         "depth": 4.0
       },
+      "source": {
+        "kind": "file",
+        "path": "props/park_bench"
+      },
+      "fallback": {
+        "shape": "box",
+        "color": "#3f9d63",
+        "height": 0.9
+      },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='8'%20y='18'%20width='24'%20height='4'%20fill='%233f9d63'/%3E%3Crect%20x='10'%20y='22'%20width='3'%20height='8'%20fill='%233f9d63'/%3E%3Crect%20x='27'%20y='22'%20width='3'%20height='8'%20fill='%233f9d63'/%3E%3C/svg%3E"
     },
     {
@@ -48,6 +90,15 @@
       "footprint": {
         "width": 0.5,
         "depth": 0.5
+      },
+      "source": {
+        "kind": "file",
+        "path": "props/street_lamp"
+      },
+      "fallback": {
+        "shape": "cylinder",
+        "color": "#7d848f",
+        "height": 5
       },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='19'%20y='10'%20width='2'%20height='24'%20fill='%237d848f'/%3E%3Ccircle%20cx='20'%20cy='9'%20r='5'%20fill='%23c6a13b'/%3E%3C/svg%3E"
     },
@@ -59,6 +110,15 @@
         "width": 1.0,
         "depth": 1.0
       },
+      "source": {
+        "kind": "file",
+        "path": "people/pedestrian"
+      },
+      "fallback": {
+        "shape": "cylinder",
+        "color": "#c6a13b",
+        "height": 1.8
+      },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Ccircle%20cx='20'%20cy='12'%20r='5'%20fill='%23c6a13b'/%3E%3Crect%20x='15'%20y='18'%20width='10'%20height='16'%20rx='3'%20fill='%23c6a13b'/%3E%3C/svg%3E"
     },
     {
@@ -69,6 +129,15 @@
         "width": 5.5,
         "depth": 8.0
       },
+      "source": {
+        "kind": "file",
+        "path": "vehicles/sedan"
+      },
+      "fallback": {
+        "shape": "box",
+        "color": "#3b78c6",
+        "height": 1.5
+      },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='6'%20y='15'%20width='28'%20height='12'%20rx='3'%20fill='%233b78c6'/%3E%3Crect%20x='12'%20y='10'%20width='16'%20height='8'%20rx='2'%20fill='%235a94dd'/%3E%3C/svg%3E"
     },
     {
@@ -78,6 +147,15 @@
       "footprint": {
         "width": 6.0,
         "depth": 10.0
+      },
+      "source": {
+        "kind": "file",
+        "path": "vehicles/delivery_van"
+      },
+      "fallback": {
+        "shape": "box",
+        "color": "#3b78c6",
+        "height": 2.5
       },
       "thumbnail": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='40'%20height='40'%3E%3Crect%20width='40'%20height='40'%20fill='%232b2f38'/%3E%3Crect%20x='6'%20y='10'%20width='24'%20height='18'%20rx='2'%20fill='%233b78c6'/%3E%3Crect%20x='28'%20y='16'%20width='8'%20height='12'%20rx='1'%20fill='%235a94dd'/%3E%3C/svg%3E"
     }
@@ -123,5 +201,62 @@
         "name": "Stop line"
       }
     ]
-  }
+  },
+  "materials": [
+    {
+      "id": "asphalt",
+      "kind": "surface",
+      "source": {
+        "path": "materials/roads.blend",
+        "name": "asphalt"
+      },
+      "fallback": {
+        "color": "#3a3a3a"
+      }
+    },
+    {
+      "id": "dirt",
+      "kind": "surface",
+      "source": {
+        "path": "materials/roads.blend",
+        "name": "dirt"
+      },
+      "fallback": {
+        "color": "#8a6d4b"
+      }
+    },
+    {
+      "id": "marking_white",
+      "kind": "marking",
+      "source": {
+        "path": "materials/roads.blend",
+        "name": "marking_white"
+      },
+      "fallback": {
+        "color": "#f2f2f2"
+      }
+    },
+    {
+      "id": "marking_yellow",
+      "kind": "marking",
+      "source": {
+        "path": "materials/roads.blend",
+        "name": "marking_yellow"
+      },
+      "fallback": {
+        "color": "#e8c33a"
+      }
+    },
+    {
+      "id": "ground",
+      "kind": "ground",
+      "source": {
+        "path": "materials/roads.blend",
+        "name": "ground"
+      },
+      "fallback": {
+        "color": "#7a8a6a"
+      }
+    }
+  ]
 }

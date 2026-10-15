@@ -1,114 +1,155 @@
-// ============================================================================
-// PLACEHOLDER EXPORT FORMAT — NOT Document 2.
+// The Blender-facing export: the `city-layout/1.0` format defined by
+// Document 2 (docs/requirements/02-export-format.md). That document is the
+// contract with the importer and is normative - where this file and it
+// disagree, this file has the bug. FMT-### / SCT-### below are its rule ids.
 //
-// Per CLAUDE.md: "Document 2: the export/interchange format... doesn't exist
-// yet... expect [this file] to be rewritten later." Everything below is a
-// deliberately minimal, reasonable-looking JSON shape covering the current
-// model (buildings, props, roads, scatter regions) so the export dialog/
-// trigger/validation UX (the actual M6 deliverable) has something real to
-// call. Do NOT treat any field name, nesting, or unit convention here as
-// settled - none of it has been reviewed against Document 2.
+// A format change is one change (FMT-29): Document 2, its §18 version
+// history, this file, EXPORT_CONVENTIONS below and a test fixture all move
+// together.
 //
-// One open question from §10 of the requirements doc that this file makes
-// a placeholder call on: scatter regions are exported as region + density
-// metadata (matching FR-18's "regenerated on each export"), NOT
-// pre-expanded into a fixed point list - §10's open question #2 leaves
-// that choice for Document 2/3 to actually decide.
-//
-// Revised after the export-format gap audit: the file now states its own
-// units, axes, anchors and expansion rules (EXPORT_CONVENTIONS), flips to a
-// y-up convention, keeps each entity's `type`, resolves footprints to
-// concrete sizes, carries the manifest version, resolved junctions and
-// export-time warnings. Still a placeholder until Document 2 formalizes it.
-// ============================================================================
-
-import { downloadJson, downloadBlob } from './download.js';
-import { computeBaseSlab } from '../model/baseSlab.js';
-import { buildingFootprint } from '../model/entities/building.js';
-import { pointAssetFootprint } from '../model/entities/pointAsset.js';
-import { findJunctions, CONNECT_EPSILON } from '../model/entities/road.js';
-import { DEFAULT_SCATTER_FOOTPRINT, MAX_ATTEMPTS_PER_INSTANCE } from '../model/entities/scatterRegion.js';
-
-export const EXPORT_FORMAT_VERSION = 'placeholder-1';
-
-// The conventions every number in the file follows, written into the file
-// itself (`conventions`) so an importer never has to guess them.
+// The file is STANDALONE: every asset and material the layout uses is copied
+// in from the manifest (`library`), so the importer never reads the manifest.
+// It is RESOLVED: footprints, junctions, marking positions and scatter pools
+// are written out in final form, so Blender never re-implements editor logic.
 //
 // The editor works in canvas coordinates: origin at the top-left corner,
 // +y pointing DOWN the screen, rotation in degrees clockwise on screen. That
 // stays the internal convention - the flip happens here, on the way out, to
 // Blender's: Z up, and in the top-down view (looking down -Z) +X to the right
-// and +Y up the screen, away from the default front-view camera. The canvas
-// then spans x 0..canvas.width, y 0..canvas.depth with the origin at the
-// corner that was bottom-left in the editor.
+// and +Y up the screen. Nothing downstream flips Y again (§3.2).
+
+import { downloadJson, downloadBlob } from './download.js';
+import { computeBaseSlab, BASE_MATERIAL_ID } from '../model/baseSlab.js';
+import { buildingFootprint } from '../model/entities/building.js';
+import { pointAssetFootprint } from '../model/entities/pointAsset.js';
+import { findJunctions, isClosedRoad, CONNECT_EPSILON } from '../model/entities/road.js';
+import {
+  scatterInstanceFootprint, DEFAULT_SCATTER_FOOTPRINT, MAX_ATTEMPTS_PER_INSTANCE,
+} from '../model/entities/scatterRegion.js';
+import { entityUid } from '../model/entityTypes.js';
+import { roadMarkingGeometry } from '../model/roadMarkings.js';
+import { usedAssets, usedMaterials, scatterVariantPool } from '../model/libraryReferences.js';
+
+export const EXPORT_FORMAT_VERSION = 'city-layout/1.0';
+
+// The asset folder's name inside the project folder (§6.1). The importer is
+// told where the project folder is (FMT-33); every `source.path` in the file
+// is relative to this folder (FMT-12).
+export const DEFAULT_ASSET_ROOT = 'assets';
+
+/**
+ * Thrown when a layout can't be written as a valid export - a reference the
+ * manifest can't resolve, an entity with no usable id. The export dialog's
+ * validation pass (model/validation.js) reports every such case as a
+ * blocking error first, so this only fires if a payload is built without it.
+ */
+export class ExportError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ExportError';
+  }
+}
+
+// A human-readable summary of Document 2 §3, written into every file
+// (`conventions`). Informative only - the document is the contract.
 export const EXPORT_CONVENTIONS = Object.freeze({
+  note: 'summary of the city-layout/1.0 conventions for a reader of this file; the format specification is normative',
   units: { length: 'meters', rotation: 'degrees' },
   axes: {
     origin: 'the canvas corner that is bottom-left in a top-down view',
-    x: '+X is right (east) in a top-down view; the canvas spans 0..canvas.width',
-    y: '+Y is up (north) in a top-down view, away from the default front-view camera; the canvas spans 0..canvas.depth',
-    z: '+Z is up (Blender world up); the file carries no Z coordinates - everything stands on the ground plane',
+    x: '+X is right (east) in a top-down view; the canvas spans 0..layout.canvas.width',
+    y: '+Y is up (north) in a top-down view, away from the default front-view camera; the canvas spans 0..layout.canvas.depth; already flipped from the editor - never flip it again',
+    z: '+Z is up (Blender world up); the file carries no Z coordinates - everything stands on the ground plane; a missing z is 0',
     rotation: 'degrees counter-clockwise about +Z seen from above, normalized to [0, 360); at 0 an entity\'s local X (footprint width) runs along world +X and its local Y (footprint depth) along world +Y',
   },
   anchors: {
     'buildings, props, vehicles, people': 'x, y is the footprint center; the footprint rotates about it',
     scatterRegions: 'x, y is the center of an axis-aligned width x depth rectangle (never rotated)',
     base: 'x, y is the center of an axis-aligned width x depth rectangle (never rotated)',
-    'roads, junctions': 'absolute points - no anchor',
+    'roads, junctions, marking areas': 'absolute points - no anchor',
+    'marking lines': 'an offset from the road centerline, not points',
+  },
+  assetOrientation: {
+    front: 'at rotation 0 an asset\'s front (a building\'s door side, a vehicle\'s nose, a person\'s face) faces world -Y',
+    origin: 'an asset\'s origin is its footprint center at ground level',
   },
   sizes: {
-    footprint: 'final top-down size in meters, footprintScale already applied - never null (a variant with no manifest footprint is resolved to the editor default here)',
+    footprint: 'final top-down size in meters, footprintScale already applied - never null',
     footprintScale: 'the multiplier the editor applied to the variant\'s footprint; informational - already included in footprint',
     height: 'buildings only: absolute height in meters; NOT multiplied by footprintScale',
   },
+  library: {
+    assetRoot: 'the asset folder\'s name inside the project folder; the importer is told where the project folder is',
+    assets: 'one entry per asset this file uses; id matches variantId on entities and the ids in scatter pools; index is 0..n-1 within this file',
+    source: 'kind "file": path is a model file, or a folder of them (a family - one is picked per instance by uid), relative to assetRoot; kind "procedural": built by the named generator from params',
+    fallback: 'the primitive to build, sized to the instance\'s footprint, when the source cannot be resolved; height applies to props, vehicles and people (a building uses its own height)',
+    materials: 'one entry per material this file uses, referenced by road surface, marking material and base.material; source is a material name inside a .blend file relative to assetRoot; fallback.color is used when that cannot be loaded',
+  },
+  ids: {
+    id: 'unique string within the file',
+    uid: 'unique positive integer within the file (the number at the end of id); for stable per-instance randomness',
+  },
   roads: {
-    points: 'ordered centerline polyline, straight segments only',
+    points: 'ordered centerline as authored: straight segments, sharp corners; the importer may round the corners',
+    closed: 'true for a loop: the last point equals the first and the strip has no end caps; otherwise the ends are round-capped',
     width: 'full road width in meters (edge to edge), one value per path',
-    laneWidth: 'meters; spacing of lane dividers when markings.laneDividers is on',
-    surface: 'manifest roadStyles.surfaces id',
-    markings: 'centerLine is a manifest roadStyles.centerLines id or "none"; laneDividers/crosswalk/stopLine are on/off manifest roadStyles.markingFeatures; crosswalk and stopLine sit at the LAST point of the path',
+    laneWidth: 'meters; informational - lane dividers are already resolved in markingGeometry',
+    surface: 'a library.materials id of kind "surface"',
+    markings: 'the editor\'s settings, informational - build markings from markingGeometry only',
+    markingGeometry: {
+      lines: 'run the full length of the road, parallel to its centerline; offset is meters from the centerline, positive to the LEFT of the direction of travel (points[0] toward the last point) seen from above; width is the painted width; dash is null (solid) or a repeating length/gap in meters starting at the first point',
+      areas: 'crosswalk stripes and stop lines as closed polygons in absolute coordinates (first point not repeated); only at the last point of an open road',
+    },
   },
   junctions: {
     connectionTolerance: CONNECT_EPSILON,
-    connectionToleranceNote: 'meters; road points within this distance are the same location',
+    connectionToleranceNote: 'meters; road points within this distance are the same location (and are written with identical values)',
     attachments: 'one per place a road meets the junction: kind "vertex" = on points[pointIndex]; kind "segment" = partway along segment segmentIndex (points[i] -> points[i+1]); distanceAlongPath = meters from points[0] along the path',
+    'width, surface': 'from the widest road at the junction; intended for the junction patch',
   },
   scatterRegions: {
     count: 'exact number of instances to generate (an absolute count, not a density)',
-    variantIds: 'manifest asset ids to pick from uniformly at random; an empty list means any manifest asset in the region\'s category',
-    instanceFootprint: 'the largest manifest footprint among the pool; the default below when no pool asset has one',
+    variantIds: 'the resolved pool of library.assets ids to pick from uniformly at random; never empty',
+    instanceFootprint: 'the largest footprint in the pool; the default below when no pool asset has one',
     defaultInstanceFootprint: { ...DEFAULT_SCATTER_FOOTPRINT },
     placement: 'instance centers uniformly random within the region inset by half the instance footprint on each side, so whole instances stay inside; on an axis where the region is smaller than the footprint, centers sit on the region\'s center line',
     validPlacement: 'a candidate center is rejected when it falls inside any building/prop/vehicle/person footprint in this file (rotated rect); a vehicles-category center must lie on a road strip (within width/2 of the centerline, including the round end caps); every other category must not',
     overlapTest: 'point-in-footprint: only the instance center is tested, not its own footprint',
     instanceOverlap: 'scattered instances are not tested against each other, within or across regions',
-    attempts: `rejected candidates are redrawn, up to ${MAX_ATTEMPTS_PER_INSTANCE} candidates per requested instance in total; a region may yield fewer than count instances (zero for a vehicles region no road reaches into - reported as a scatter-vehicles-no-road warning)`,
-    rotation: 'uniformly random in [0, 360) per instance',
-    randomization: 'regenerated on every import - no seed (FR-18)',
+    attempts: `rejected candidates are redrawn, up to ${MAX_ATTEMPTS_PER_INSTANCE} candidates per requested instance in total; a region may yield fewer than count instances`,
+    perInstance: 'a uniformly random variant from variantIds and a uniformly random rotation in [0, 360)',
+    randomization: 'regenerated on every import - no seed',
   },
-  warnings: 'non-blocking validation warnings at export time (FR-22); message is the editor\'s text, in editor coordinates - use the structured fields',
-  previewImage: 'optional: the filename of a PNG snapshot of the editor view, downloaded as a separate file next to this one (not embedded); absent when no preview was requested',
+  base: 'null when nothing is placed; otherwise the slab everything stands on, with material a library.materials id of kind "ground"',
+  warnings: 'non-blocking issues present at export time; message is the editor\'s own text and may quote EDITOR coordinates (y down) - use the structured x, y, which are in this file\'s coordinates',
+  previewImage: 'optional: the filename of a PNG snapshot of the editor view, saved as a separate file next to this one (not embedded); absent when no preview was requested',
 });
 
 /**
  * Build the export payload from the current project state. Pure - no DOM,
  * fully unit-testable (tests/io/exporter.test.js) - the actual file
- * download (triggerDownload) is the only DOM-touching part of this module.
+ * download (downloadExport) is the only DOM-touching part of this module.
  *
- * `issues` is the validation result the export was allowed on; its
- * warnings are written into the file (see prepareExport).
+ * `manifest` is required: the file's `library` is copied out of it. `issues`
+ * is the validation result the export was allowed on; its warnings are
+ * written into the file (see prepareExport). Throws ExportError for a layout
+ * that can't be written as a valid file.
  */
 export function buildExportPayload(project, {
   previewImageFilename = null, manifest = null, base = {}, issues = [],
 } = {}) {
+  if (!manifest) {
+    throw new ExportError('export: the asset manifest is not loaded - the file\'s library cannot be written');
+  }
   const depth = project.canvas.height;
-  // Canvas (y down) -> export (y up) - see EXPORT_CONVENTIONS.
+  // Canvas (y down) -> export (y up).
   const flipY = (y) => depth - y;
   const point = (p) => ({ x: p.x, y: flipY(p.y) });
 
   const pointAsset = (e, footprint) => ({
     type: e.type,
     id: e.id,
+    uid: exportUid(e),
     variantId: e.variantId,
     x: e.x,
     y: flipY(e.y),
@@ -117,61 +158,188 @@ export function buildExportPayload(project, {
     footprint,
   });
 
+  // Resolved once here from the same function the editor draws junctions
+  // with (FR-7), so Blender never has to re-derive road topology.
+  const junctions = findJunctions(project.roads);
+  const sharedPoints = sharedRoadPoints(junctions);
   const slab = computeBaseSlab(project, manifest, base);
-  const payload = {
+
+  return {
     formatVersion: EXPORT_FORMAT_VERSION,
     generatedAt: new Date().toISOString(),
-    manifestVersion: manifest ? manifest.version : null,
+    manifestVersion: manifest.version, // traceability only (FMT-5)
     conventions: EXPORT_CONVENTIONS,
-    canvas: { width: project.canvas.width, depth },
-    // The ground everything stands on, derived from what is actually placed
-    // rather than from the canvas - null for an empty layout. `manifest` is
-    // what sizes each entity's footprint; without it they fall back to their
-    // default sizes and the slab is correspondingly approximate.
-    base: slab && {
-      ...centeredRect(slab.x, slab.y, slab.width, slab.depth, flipY),
-      thickness: slab.thickness,
+    // Only the sibling PNG's filename - the image itself is its own download
+    // (FR-26), so the JSON stays small and the PNG stays a plain image file.
+    ...(previewImageFilename ? { previewImage: previewImageFilename } : {}),
+
+    // The catalog: each KIND of thing this file uses, defined once (§6, §12).
+    library: {
+      assetRoot: DEFAULT_ASSET_ROOT,
+      assets: libraryAssets(project, manifest),
+      materials: libraryMaterials(project, manifest),
     },
-    buildings: project.buildings.map((b) => ({
-      ...pointAsset(b, buildingFootprint(b, manifest)),
-      height: b.height, // absolute - footprintScale does not apply (building.js)
-    })),
-    props: project.props.map((e) => pointAsset(e, pointAssetFootprint(e, manifest))),
-    vehicles: project.vehicles.map((e) => pointAsset(e, pointAssetFootprint(e, manifest))),
-    people: project.people.map((e) => pointAsset(e, pointAssetFootprint(e, manifest))),
-    roads: project.roads.map((r) => ({
-      type: r.type,
-      id: r.id,
-      points: r.points.map(point),
-      width: r.width,
-      laneWidth: r.laneWidth,
-      surface: r.surface,
-      markings: { ...r.markings },
-    })),
-    // Resolved once here from the same function the editor draws junctions
-    // with (FR-7), so Blender never has to re-derive road topology. The
-    // disc width/surface are the editor's drawing detail and stay behind.
-    junctions: findJunctions(project.roads).map((j) => ({
-      ...point(j),
-      roadIds: [...j.roadIds],
-      attachments: j.attachments.map((att) => ({ ...att })),
-    })),
-    // Scatter regions stay regions + count (FR-18) - never pre-expanded
-    // here; the rules for expanding them are in `conventions`.
-    scatterRegions: project.scatterRegions.map((r) => ({
-      type: r.type,
-      id: r.id,
-      category: r.category,
-      ...centeredRect(r.x, r.y, r.width, r.height, flipY),
-      count: r.count,
-      variantIds: [...r.variantIds],
-    })),
+
+    // The placements: one entry per occurrence on the map, pointing at the
+    // catalog by id. Every array is always present, empty if unused (§4).
+    layout: {
+      canvas: { width: project.canvas.width, depth },
+      // The ground everything stands on, derived from what is actually
+      // placed rather than from the canvas - null for an empty layout (§11).
+      base: slab && {
+        ...centeredRect(slab.x, slab.y, slab.width, slab.depth, flipY),
+        thickness: slab.thickness,
+        material: BASE_MATERIAL_ID,
+      },
+      buildings: project.buildings.map((b) => ({
+        ...pointAsset(b, buildingFootprint(b, manifest)),
+        height: b.height, // absolute - footprintScale does not apply (building.js)
+      })),
+      props: project.props.map((e) => pointAsset(e, pointAssetFootprint(e, manifest))),
+      vehicles: project.vehicles.map((e) => pointAsset(e, pointAssetFootprint(e, manifest))),
+      people: project.people.map((e) => pointAsset(e, pointAssetFootprint(e, manifest))),
+      roads: project.roads.map((r) => exportRoad(r, sharedPoints, point)),
+      junctions: junctions.map((j) => ({
+        ...point(j),
+        roadIds: [...j.roadIds],
+        // of the widest road there - what a junction patch has to cover (§9)
+        width: j.width,
+        surface: j.surface,
+        attachments: j.attachments.map((att) => ({ ...att })),
+      })),
+      // Scatter regions stay regions + count (FR-18) - never pre-expanded
+      // here; the importer expands them by the SCT rules (§10).
+      scatterRegions: project.scatterRegions.map((r) => exportScatterRegion(r, manifest, flipY)),
+    },
+
     warnings: issues.filter((i) => i.severity === 'warning').map((i) => exportWarning(i, flipY)),
   };
-  // Only the sibling PNG's filename - the image itself is its own download
-  // (FR-26), so the JSON stays small and the PNG stays a plain image file.
-  if (previewImageFilename) payload.previewImage = previewImageFilename;
-  return payload;
+}
+
+// --- library (§6, §12) -------------------------------------------------------
+// One entry per asset / material the layout actually uses, copied from the
+// manifest (FMT-18) - never the whole manifest.
+
+function libraryAssets(project, manifest) {
+  return usedAssets(project, manifest).map(({ id }, index) => {
+    const asset = manifest.byId(id);
+    if (!asset) throw new ExportError(`export: asset "${id}" is not in the manifest`);
+    if (!asset.source || !asset.fallback) {
+      throw new ExportError(`export: asset "${id}" has no source/fallback in the manifest`);
+    }
+    return {
+      id,
+      index, // position in this (id-sorted) table: stable within the file
+      category: asset.category,
+      source: asset.source.kind === 'procedural'
+        ? { kind: 'procedural', generator: asset.source.generator, params: { ...asset.source.params } }
+        : { kind: 'file', path: asset.source.path },
+      fallback: {
+        shape: asset.fallback.shape,
+        color: asset.fallback.color,
+        // absent for a building's stand-in, which uses the building's height
+        ...(asset.fallback.height == null ? {} : { height: asset.fallback.height }),
+      },
+    };
+  });
+}
+
+function libraryMaterials(project, manifest) {
+  return usedMaterials(project).map(({ id, kind }) => {
+    const material = manifest.material(id);
+    if (!material || material.kind !== kind) {
+      throw new ExportError(`export: the manifest has no ${kind} material "${id}"`);
+    }
+    return {
+      id,
+      kind,
+      source: { path: material.source.path, name: material.source.name },
+      fallback: { color: material.fallback.color },
+    };
+  });
+}
+
+// --- layout ------------------------------------------------------------------
+
+// §7: the number at the end of the id - unique across every entity type.
+function exportUid(entity) {
+  const uid = entityUid(entity);
+  if (uid === null) throw new ExportError(`export: "${entity.id}" has an id that does not end in a number`);
+  return uid;
+}
+
+// FMT-9: points at the same location are written with IDENTICAL values, so
+// an importer comparing them never depends on the tolerance. A road point
+// sitting on a junction (within the editor's connection tolerance) is
+// therefore written as the junction's own position. Keyed "roadId#pointIndex".
+function sharedRoadPoints(junctions) {
+  const shared = new Map();
+  for (const j of junctions) {
+    for (const att of j.attachments) {
+      if (att.kind === 'vertex') shared.set(`${att.roadId}#${att.pointIndex}`, j);
+    }
+  }
+  return shared;
+}
+
+function exportRoad(road, sharedPoints, point) {
+  const closed = isClosedRoad(road);
+  const points = road.points.map((p, i) => point(sharedPoints.get(`${road.id}#${i}`) || p));
+  // A loop's last point IS its first (§8) - same values, not merely close.
+  if (closed) points[points.length - 1] = { ...points[0] };
+
+  const marking = roadMarkingGeometry(road);
+  return {
+    type: road.type,
+    id: road.id,
+    uid: exportUid(road),
+    points,
+    closed,
+    width: road.width,
+    laneWidth: road.laneWidth,
+    surface: road.surface,
+    markings: { ...road.markings }, // the editor's settings - informational
+    // What those settings resolve to (§8.1), from the same model code the
+    // canvas draws (model/roadMarkings.js).
+    markingGeometry: {
+      lines: marking.lines.map((line) => ({
+        material: line.material,
+        offset: exportOffset(line.offset),
+        width: line.width,
+        dash: line.dash ? { length: line.dash.length, gap: line.dash.gap } : null,
+      })),
+      areas: marking.areas.map((area) => ({
+        material: area.material,
+        polygon: area.polygon.map(point),
+      })),
+    },
+  };
+}
+
+// The editor measures a line's offset toward the right of travel as seen on
+// screen; the export's positive side is the LEFT, seen from above (§8.1).
+// The y flip does not change which side that is, so the sign does.
+function exportOffset(offset) {
+  return offset === 0 ? 0 : -offset; // never -0
+}
+
+function exportScatterRegion(region, manifest, flipY) {
+  const pool = scatterVariantPool(region, manifest);
+  if (pool.length === 0) {
+    throw new ExportError(`export: scatter region "${region.id}" has no assets to choose from`);
+  }
+  return {
+    type: region.type,
+    id: region.id,
+    uid: exportUid(region),
+    category: region.category,
+    ...centeredRect(region.x, region.y, region.width, region.height, flipY),
+    count: region.count,
+    // Always the resolved pool and size (§10): "empty = any asset in the
+    // category" is expanded here, so the importer never needs the manifest.
+    variantIds: pool,
+    instanceFootprint: scatterInstanceFootprint(region, manifest),
+  };
 }
 
 // Editor rotation is clockwise on a y-down screen; after the y flip the
@@ -190,8 +358,14 @@ function centeredRect(x, y, width, depth, flipY) {
   };
 }
 
+// §13. Only warnings ever reach a file - an error blocks the export.
 function exportWarning(issue, flipY) {
-  const warning = { code: issue.code, message: issue.message, entityIds: [...(issue.entityIds || [])] };
+  const warning = {
+    code: issue.code,
+    severity: 'warning',
+    message: issue.message,
+    entityIds: [...(issue.entityIds || [])],
+  };
   if (Number.isFinite(issue.x) && Number.isFinite(issue.y)) {
     warning.x = issue.x;
     warning.y = flipY(issue.y);

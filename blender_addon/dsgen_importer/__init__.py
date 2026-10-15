@@ -1,6 +1,11 @@
 """DSGen layout importer.
 
-Reads a DSGen web-editor export (JSON) and builds the map from geometry nodes.
+Reads a DSGen web-editor export (JSON, the `city-layout/1.x` format defined by
+docs/requirements/02-export-format.md) and builds the map from geometry nodes.
+
+This is a proof of concept built ahead of the importer's own requirements
+(Document 3): it reads and checks the whole file, but builds boxes and road
+strips only. What it leaves out is listed in the import's warnings.
 
 Geometry nodes cannot read files, so the work is split in two:
   1. The importer turns the JSON into "carrier" meshes: bare points (one per
@@ -11,20 +16,30 @@ Geometry nodes cannot read files, so the work is split in two:
        "DSGen Roads"  edges  -> road strips with filleted corners
 Re-importing replaces the carrier data only; modifier settings are kept.
 
+The file is read and checked by layout_file.py and turned into carrier data by
+carriers.py; neither imports Blender, so both are tested with plain Python.
+Only this file talks to Blender.
+
 UI: 3D Viewport > Sidebar (N) > DSGen > Import Layout JSON.
 """
-import json
-import math
+import os
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
+
+from .carriers import base_carrier, box_carrier, road_carriers, unbuilt_sections
+from .layout_file import LayoutError, load_layout
 
 COLLECTION = "DSGen Map"
 ROOT = "DSGen_Map"
 BOXES_GROUP = "DSGen Boxes"
 ROADS_GROUP = "DSGen Roads"
+# The panel shows this many warnings; all of them go to the system console.
+MAX_PANEL_WARNINGS = 8
 
-# The export gives heights for buildings only; these fill in for the rest.
+# Heights come from the file (a building's own, or its asset's fallback
+# height for the rest); these are only the node group's default for a carrier
+# that somehow has none.
 DEFAULT_HEIGHTS = {"buildings": 10.0, "props": 6.0, "vehicles": 1.6, "people": 1.8}
 COLORS = {
     "buildings": "#c65d3b", "props": "#3f9d63", "vehicles": "#3b78c6",
@@ -249,20 +264,11 @@ def _modifier(obj, group, values):
         mod[ids[name]] = value
 
 
-def _boxes(name, category, entities, col, root, below_ground=False):
-    variants = sorted({e.get("variantId", "") for e in entities})
-    attrs = {
-        "width": ("FLOAT", [e["footprint"]["width"] for e in entities]),
-        "depth": ("FLOAT", [e["footprint"]["depth"] for e in entities]),
-        "rotation": ("FLOAT", [math.radians(e.get("rotation", 0.0)) for e in entities]),
-        "variant": ("INT", [variants.index(e.get("variantId", "")) for e in entities]),
-    }
-    if all("height" in e for e in entities):
-        attrs["height"] = ("FLOAT", [e["height"] for e in entities])
-    obj, created = _carrier(name, col, root, [(e["x"], e["y"], 0.0) for e in entities], [], attrs)
-    # lookup tables for the asset pass: variant attribute -> manifest asset id
-    obj["dsgen_variants"] = variants
-    obj["dsgen_ids"] = [e.get("id", "") for e in entities]
+def _boxes(name, category, carrier, col, root, below_ground=False):
+    obj, _ = _carrier(name, col, root, carrier["verts"], carrier["edges"], carrier["attrs"])
+    # lookup tables for the asset pass: variant attribute -> library asset id
+    obj["dsgen_variants"] = carrier["variants"]
+    obj["dsgen_ids"] = carrier["ids"]
     _modifier(obj, ensure_boxes_group(), {
         "Default Height": DEFAULT_HEIGHTS.get(category, 3.0),
         "Below Ground": below_ground,
@@ -271,61 +277,64 @@ def _boxes(name, category, entities, col, root, below_ground=False):
     return obj
 
 
-def _roads(surface, roads, col, root, tolerance):
-    verts, edges, widths = [], [], []
-    for road in roads:
-        pts = [(p["x"], p["y"]) for p in road["points"]]
-        pts = [p for i, p in enumerate(pts) if i == 0 or math.dist(p, pts[i - 1]) > tolerance]
-        # a loop is exported as a path whose last point repeats its first
-        closed = len(pts) > 3 and math.dist(pts[0], pts[-1]) <= tolerance
-        if closed:
-            pts.pop()
-        if len(pts) < 2:
-            continue
-        start = len(verts)
-        verts += [(x, y, 0.0) for x, y in pts]
-        widths += [road["width"]] * len(pts)
-        edges += [(start + i, start + i + 1) for i in range(len(pts) - 1)]
-        if closed:
-            edges.append((start + len(pts) - 1, start))
-    obj, _ = _carrier("DSGen_Roads_" + surface, col, root, verts, edges, {"width": ("FLOAT", widths)})
-    obj["dsgen_ids"] = [r.get("id", "") for r in roads]
+def _roads(surface, carrier, col, root):
+    obj, _ = _carrier("DSGen_Roads_" + surface, col, root,
+                      carrier["verts"], carrier["edges"], carrier["attrs"])
+    obj["dsgen_ids"] = carrier["ids"]
     _modifier(obj, ensure_roads_group(), {"Material": get_material("road:" + surface)})
     return obj
 
 
-def import_layout(path):
-    with open(bpy.path.abspath(path), encoding="utf-8") as f:
-        data = json.load(f)
+def _asset_folder(layout, project_dir, warnings):
+    """<project folder>/<assetRoot> (FMT-33). The project folder is the
+    importer's own setting - never worked out from where the JSON or the
+    .blend file is saved. Nothing is loaded from it yet."""
+    if not project_dir:
+        return ""
+    folder = os.path.join(bpy.path.abspath(project_dir), layout.asset_root)
+    if not os.path.isdir(folder):
+        warnings.append('the asset folder "%s" does not exist' % folder)
+    return folder
+
+
+def import_layout(path, project_dir=""):
+    """Build the map from the export at `path`. Returns (objects, warnings).
+
+    Raises LayoutError, before anything is built or removed, for a file that
+    must not be imported (Document 2 section 14).
+    """
+    layout = load_layout(bpy.path.abspath(path))
+    warnings = list(layout.warnings) + unbuilt_sections(layout)
+
     col = _collection()
     root = _root(col)
     root["dsgen_source"] = path
-    root["dsgen_format"] = data.get("formatVersion", "")
+    root["dsgen_format"] = layout.format_version
+    root["dsgen_asset_folder"] = _asset_folder(layout, project_dir, warnings)
     made = []
 
-    base = data.get("base")
+    base = base_carrier(layout)
     if base:
-        slab = {"x": base["x"], "y": base["y"], "height": base["thickness"],
-                "footprint": {"width": base["width"], "depth": base["depth"]}}
-        made.append(_boxes("DSGen_Base", "base", [slab], col, root, below_ground=True))
+        made.append(_boxes("DSGen_Base", "base", base, col, root, below_ground=True))
 
     for category in ("buildings", "props", "vehicles", "people"):
-        if data.get(category):
-            made.append(_boxes("DSGen_" + category.capitalize(), category, data[category], col, root))
+        carrier = box_carrier(layout, category)
+        if carrier:
+            made.append(_boxes("DSGen_" + category.capitalize(), category, carrier, col, root))
 
-    tolerance = data.get("conventions", {}).get("junctions", {}).get("connectionTolerance", 1e-6)
-    by_surface = {}
-    for road in data.get("roads", []):
-        by_surface.setdefault(road.get("surface") or "default", []).append(road)
-    for surface, roads in by_surface.items():
-        made.append(_roads(surface, roads, col, root, tolerance))
+    for surface, carrier in road_carriers(layout).items():
+        made.append(_roads(surface, carrier, col, root))
 
     # carriers left over from a previous import that this file no longer has
     keep = {o.name for o in made} | {ROOT}
     for obj in [o for o in col.objects if o.name.startswith("DSGen_") and o.name not in keep]:
         bpy.data.objects.remove(obj)
+
+    root["dsgen_warnings"] = "\n".join(warnings)
     print("DSGen: imported", ", ".join(o.name for o in made))
-    return made
+    for warning in warnings:
+        print("DSGen: warning:", warning)
+    return made, warnings
 
 
 # --- UI: 3D Viewport > Sidebar (N) > DSGen ---------------------------------
@@ -341,11 +350,18 @@ class DSGEN_OT_import_json(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         try:
-            made = import_layout(self.filepath)
+            made, warnings = import_layout(self.filepath, context.scene.dsgen_project_dir)
+        except LayoutError as err:
+            self.report({"ERROR"}, "DSGen: this file cannot be imported - %s" % err)
+            return {"CANCELLED"}
         except (OSError, ValueError, KeyError, TypeError) as err:
             self.report({"ERROR"}, "DSGen import failed: %s: %s" % (type(err).__name__, err))
             return {"CANCELLED"}
-        self.report({"INFO"}, "DSGen: imported %d layers" % len(made))
+        if warnings:
+            self.report({"WARNING"}, "DSGen: imported %d layers with %d warning(s) - see the DSGen panel"
+                        % (len(made), len(warnings)))
+        else:
+            self.report({"INFO"}, "DSGen: imported %d layers" % len(made))
         return {"FINISHED"}
 
 
@@ -372,18 +388,34 @@ class VIEW3D_PT_dsgen(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(context.scene, "dsgen_project_dir")
         layout.operator("dsgen.import_json", icon="IMPORT")
         root = bpy.data.objects.get(ROOT)
         source = root.get("dsgen_source") if root else None
         if source:
             layout.operator("dsgen.reimport", icon="FILE_REFRESH")
             layout.label(text=bpy.path.basename(source), icon="FILE")
+        warnings = [w for w in (root.get("dsgen_warnings", "") if root else "").split("\n") if w]
+        if warnings:
+            box = layout.box()
+            box.label(text="%d warning(s)" % len(warnings), icon="ERROR")
+            for warning in warnings[:MAX_PANEL_WARNINGS]:
+                box.label(text=warning)
+            if len(warnings) > MAX_PANEL_WARNINGS:
+                box.label(text="... and %d more in the system console" % (len(warnings) - MAX_PANEL_WARNINGS))
 
 
 CLASSES = (DSGEN_OT_import_json, DSGEN_OT_reimport, VIEW3D_PT_dsgen)
 
 
 def register():
+    # The folder that holds the asset folder named in each export
+    # (library.assetRoot). An importer setting, per FMT-33.
+    bpy.types.Scene.dsgen_project_dir = bpy.props.StringProperty(
+        name="Project Folder",
+        description="Folder that contains the asset folder named in the layout export",
+        subtype="DIR_PATH",
+    )
     for cls in CLASSES:
         bpy.utils.register_class(cls)
 
@@ -391,3 +423,4 @@ def register():
 def unregister():
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
+    del bpy.types.Scene.dsgen_project_dir

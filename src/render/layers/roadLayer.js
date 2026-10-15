@@ -14,9 +14,11 @@
 // fresh every call, same as before.
 
 import { CATEGORY_COLORS } from '../../utils/categories.js';
+import { findDanglingEnds, findJunctions } from '../../model/entities/road.js';
 import {
-  findDanglingEnds, findJunctions, laneDividerOffsets, CENTER_LINE_NONE,
-} from '../../model/entities/road.js';
+  roadMarkingLines, roadMarkingBars, offsetSegments,
+  MARKING_MATERIAL_WHITE, MARKING_MATERIAL_YELLOW,
+} from '../../model/roadMarkings.js';
 
 // Surface style -> fill color (FR-8). Surface ids come from the manifest's
 // roadStyles section, which may give each one a preview `color`; these are
@@ -33,28 +35,22 @@ function surfaceColor(surface, manifest) {
   const style = manifest ? manifest.surface(surface) : null;
   return (style && style.color) || FALLBACK_SURFACE_COLORS[surface] || CATEGORY_COLORS.roads;
 }
-const MARKING_COLOR_WHITE = '#e8e6df';
-const MARKING_COLOR_YELLOW = '#d9b23c';
+// Marking paint -> 2D preview color. Which paint a marking uses, and where
+// it sits and how big it is, is model data (model/roadMarkings.js) shared
+// with the export - only the screen color belongs here.
+const MARKING_COLORS = {
+  [MARKING_MATERIAL_WHITE]: '#e8e6df',
+  [MARKING_MATERIAL_YELLOW]: '#d9b23c',
+};
+
+function markingColor(material) {
+  return MARKING_COLORS[material] || MARKING_COLORS[MARKING_MATERIAL_WHITE];
+}
 const DRAFT_COLOR = '#e0c34a';
 const SELECT_COLOR = '#4b9fd6';
 const MERGE_COLOR = '#c65d3b';
 const DANGLE_COLOR = '#e0553f';
 const POINT_RADIUS = 4;
-
-// Marking geometry, in meters (converted to px via `scale` at draw time).
-const CENTERLINE_WIDTH_M = 0.15;
-const DOUBLE_YELLOW_OFFSET_M = 0.2;
-const DASH_PATTERN_M = [1.2, 1];
-const CROSSWALK_STRIPE_COUNT = 5;
-const CROSSWALK_STRIPE_WIDTH_M = 0.5;
-const CROSSWALK_BAND_DEPTH_M = 2;
-const STOP_LINE_WIDTH_M = 0.4;
-const STOP_LINE_SETBACK_M = 1;
-const STOP_LINE_INSET_M = 0.3;
-// Where the dividers fall is road geometry, not a drawing detail - it lives
-// on the entity (laneDividerOffsets) so the lane width can be authored per
-// road. Only the dash look belongs here.
-const LANE_DIVIDER_DASH_M = [2, 2];
 
 /**
  * Draw all roads for the current project. `worldToScreen` is a (x, y) => {x,
@@ -177,149 +173,70 @@ function _drawJunctions(ctx, worldToScreen, scale, junctions, manifest) {
   ctx.restore();
 }
 
-// Markings are independent features per path (FR-8), so these are sequential
-// `if`s rather than a switch: a road can carry a dashed center line, lane
-// dividers AND a crosswalk at once. Lane dividers paint before the center
-// line so the center line stays on top where they would touch.
+// Markings (FR-8) are independent features per path - a road can carry a
+// dashed center line, lane dividers AND a crosswalk at once. What they are
+// and where they sit comes resolved from the model (model/roadMarkings.js),
+// in meters and already in paint order; this only strokes them, converting
+// to px via `scale`.
 function _drawMarkings(ctx, worldToScreen, scale, road) {
-  const m = road.markings;
+  for (const line of roadMarkingLines(road)) {
+    _drawMarkingLine(ctx, worldToScreen, scale, road, line);
+  }
+  for (const bar of roadMarkingBars(road)) {
+    _drawMarkingBar(ctx, worldToScreen, scale, bar);
+  }
+}
 
-  if (m.laneDividers) {
-    for (const offset of laneDividerOffsets(road)) {
-      _drawOffsetLine(
-        ctx, worldToScreen, scale, road, offset, MARKING_COLOR_WHITE, LANE_DIVIDER_DASH_M,
-      );
+// A line running the path's length. On the centerline it is one continuous
+// stroke along the road's own points; offset to one side (each half of a
+// double-yellow, each lane divider) it is one stroke per segment
+// (offsetSegments) rather than a mitered offset polyline - a simple
+// approximation, fine at bends for a v1 marking, per "start simple".
+function _drawMarkingLine(ctx, worldToScreen, scale, road, line) {
+  ctx.save();
+  ctx.strokeStyle = markingColor(line.material);
+  ctx.lineWidth = Math.max(1, line.width * scale);
+  ctx.lineCap = 'butt';
+  if (line.offset === 0) ctx.lineJoin = 'round';
+  ctx.setLineDash(line.dash ? [line.dash.length * scale, line.dash.gap * scale] : []);
+
+  if (line.offset === 0) {
+    ctx.beginPath();
+    const p0 = worldToScreen(road.points[0].x, road.points[0].y);
+    ctx.moveTo(p0.x, p0.y);
+    for (let i = 1; i < road.points.length; i++) {
+      const p = worldToScreen(road.points[i].x, road.points[i].y);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  } else {
+    for (const segment of offsetSegments(road, line.offset)) {
+      const sa = worldToScreen(segment.a.x, segment.a.y);
+      const sb = worldToScreen(segment.b.x, segment.b.y);
+      ctx.beginPath();
+      ctx.moveTo(sa.x, sa.y);
+      ctx.lineTo(sb.x, sb.y);
+      ctx.stroke();
     }
   }
-
-  if (m.centerLine === 'solid') {
-    _drawCenterline(ctx, worldToScreen, scale, road, MARKING_COLOR_WHITE, null);
-  } else if (m.centerLine === 'dashed') {
-    _drawCenterline(ctx, worldToScreen, scale, road, MARKING_COLOR_WHITE, DASH_PATTERN_M);
-  } else if (m.centerLine === 'double-yellow') {
-    _drawOffsetLine(ctx, worldToScreen, scale, road, DOUBLE_YELLOW_OFFSET_M, MARKING_COLOR_YELLOW, null);
-    _drawOffsetLine(ctx, worldToScreen, scale, road, -DOUBLE_YELLOW_OFFSET_M, MARKING_COLOR_YELLOW, null);
-  } else if (m.centerLine !== CENTER_LINE_NONE) {
-    // A manifest center-line style the 2D preview has no dedicated look for
-    // - shown as a plain solid line so the road still reads as marked.
-    _drawCenterline(ctx, worldToScreen, scale, road, MARKING_COLOR_WHITE, null);
-  }
-
-  if (m.crosswalk) _drawCrosswalk(ctx, worldToScreen, scale, road);
-  if (m.stopLine) _drawStopLine(ctx, worldToScreen, scale, road);
+  ctx.restore();
 }
 
-function _drawCenterline(ctx, worldToScreen, scale, road, color, dashPatternM) {
+// A short straight stroke with square ends: one zebra-crossing stripe, or
+// the stop line.
+function _drawMarkingBar(ctx, worldToScreen, scale, bar) {
+  const p1 = worldToScreen(bar.a.x, bar.a.y);
+  const p2 = worldToScreen(bar.b.x, bar.b.y);
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(1, CENTERLINE_WIDTH_M * scale);
+  ctx.strokeStyle = markingColor(bar.material);
+  ctx.lineWidth = Math.max(1, bar.width * scale);
   ctx.lineCap = 'butt';
-  ctx.lineJoin = 'round';
-  ctx.setLineDash(dashPatternM ? dashPatternM.map((d) => d * scale) : []);
-  ctx.beginPath();
-  const p0 = worldToScreen(road.points[0].x, road.points[0].y);
-  ctx.moveTo(p0.x, p0.y);
-  for (let i = 1; i < road.points.length; i++) {
-    const p = worldToScreen(road.points[i].x, road.points[i].y);
-    ctx.lineTo(p.x, p.y);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-// A line running the path's length, offset to one side of the centerline -
-// used for both halves of a double-yellow and for each lane divider.
-// Offsetting per-segment (rather than mitering a joined offset polyline) is a
-// simple approximation - fine at bends for a v1 marking, per "start simple".
-function _drawOffsetLine(ctx, worldToScreen, scale, road, offsetM, color, dashPatternM) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(1, CENTERLINE_WIDTH_M * scale);
-  ctx.lineCap = 'butt';
-  ctx.setLineDash(dashPatternM ? dashPatternM.map((d) => d * scale) : []);
-  for (let i = 0; i < road.points.length - 1; i++) {
-    const a = road.points[i];
-    const b = road.points[i + 1];
-    const perp = _perpUnit(a, b);
-    const a2 = { x: a.x + perp.x * offsetM, y: a.y + perp.y * offsetM };
-    const b2 = { x: b.x + perp.x * offsetM, y: b.y + perp.y * offsetM };
-    const sa = worldToScreen(a2.x, a2.y);
-    const sb = worldToScreen(b2.x, b2.y);
-    ctx.beginPath();
-    ctx.moveTo(sa.x, sa.y);
-    ctx.lineTo(sb.x, sb.y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-// A zebra crossing band across the road width, near the path's end.
-function _drawCrosswalk(ctx, worldToScreen, scale, road) {
-  const pts = road.points;
-  const a = pts[pts.length - 2];
-  const b = pts[pts.length - 1];
-  const dir = _unitDir(a, b);
-  const perp = { x: -dir.y, y: dir.x };
-  const halfWidth = road.width / 2;
-  const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-  const bandDepth = Math.min(CROSSWALK_BAND_DEPTH_M, segLen * 0.4);
-
-  ctx.save();
-  ctx.strokeStyle = MARKING_COLOR_WHITE;
-  ctx.lineWidth = Math.max(1, CROSSWALK_STRIPE_WIDTH_M * scale);
-  ctx.setLineDash([]);
-  for (let i = 0; i < CROSSWALK_STRIPE_COUNT; i++) {
-    const t = (i + 0.5) / CROSSWALK_STRIPE_COUNT;
-    const across = -halfWidth + t * road.width;
-    const cx = b.x + perp.x * across;
-    const cy = b.y + perp.y * across;
-    const p1 = worldToScreen(cx - dir.x * (bandDepth / 2), cy - dir.y * (bandDepth / 2));
-    const p2 = worldToScreen(cx + dir.x * (bandDepth / 2), cy + dir.y * (bandDepth / 2));
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-// A single bar across (most of) the road width, set back slightly from the
-// path's very end - where a road stops just before an intersection.
-function _drawStopLine(ctx, worldToScreen, scale, road) {
-  const pts = road.points;
-  const a = pts[pts.length - 2];
-  const b = pts[pts.length - 1];
-  const dir = _unitDir(a, b);
-  const perp = { x: -dir.y, y: dir.x };
-  const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-  const setback = Math.min(STOP_LINE_SETBACK_M, segLen * 0.3);
-  const cx = b.x - dir.x * setback;
-  const cy = b.y - dir.y * setback;
-  const halfWidth = Math.max(0, road.width / 2 - STOP_LINE_INSET_M);
-
-  const p1 = worldToScreen(cx + perp.x * halfWidth, cy + perp.y * halfWidth);
-  const p2 = worldToScreen(cx - perp.x * halfWidth, cy - perp.y * halfWidth);
-  ctx.save();
-  ctx.strokeStyle = MARKING_COLOR_WHITE;
-  ctx.lineWidth = Math.max(1, STOP_LINE_WIDTH_M * scale);
   ctx.setLineDash([]);
   ctx.beginPath();
   ctx.moveTo(p1.x, p1.y);
   ctx.lineTo(p2.x, p2.y);
   ctx.stroke();
   ctx.restore();
-}
-
-function _unitDir(a, b) {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  return len > 0 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
-}
-
-function _perpUnit(a, b) {
-  const dir = _unitDir(a, b);
-  return { x: -dir.y, y: dir.x };
 }
 
 function _drawPointHandles(ctx, worldToScreen, project) {

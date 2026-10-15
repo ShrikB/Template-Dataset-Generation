@@ -9,14 +9,21 @@
 // other non-blocking checks, but FR-22 calls out "missing manifest
 // reference" by name as an example of a blocking error; the task owner
 // confirmed the FR-22 reading is the one to implement).
+//
+// The same goes for anything else that would make the export file invalid
+// under Document 2 (findExportBlockers): the file has to be standalone and
+// every reference in it has to resolve, so a layout that can't be written
+// that way is stopped here, with a message, rather than exported broken.
 
 import { findDanglingEnds, MARKING_FEATURES } from './entities/road.js';
+import { hasUnusedEndMarkings } from './roadMarkings.js';
+import { usedAssets, usedMaterials, scatterVariantPool } from './libraryReferences.js';
 import { buildingFootprint } from './entities/building.js';
 import { rotatedRectCorners, convexPolygonsOverlap, roundTo } from '../utils/geometry.js';
 import {
   scatterObstacles, scatterInstanceFootprint, regionTouchesRoad,
 } from './entities/scatterRegion.js';
-import { entityType } from './entityTypes.js';
+import { entityType, entityUid } from './entityTypes.js';
 
 export const WARNING = 'warning';
 export const ERROR = 'error';
@@ -34,7 +41,9 @@ export function validateProject(project, manifest) {
     ...findDanglingRoadEnds(project.roads),
     ...findOutOfBoundsEntities(project),
     ...findVehicleScatterWithoutRoad(project, manifest),
+    ...findClosedRoadEndMarkings(project.roads),
     ...findMissingManifestReferences(project, manifest),
+    ...findExportBlockers(project, manifest),
   ];
 }
 
@@ -101,6 +110,25 @@ function findVehicleScatterWithoutRoad(project, manifest) {
       message: `Vehicle scatter region "${r.id}" does not overlap any road - no vehicles will be placed in it.`,
       entityIds: [r.id],
     }));
+}
+
+// --- crosswalk / stop line on a closed loop (FMT-21 - warning) --------------
+// Both sit at a road's last point. A closed loop has no end, so they are
+// neither drawn nor exported (roadMarkingBars) - say so, rather than leave a
+// ticked box in the inspector that silently does nothing.
+
+function findClosedRoadEndMarkings(roads) {
+  return roads.filter(hasUnusedEndMarkings).map((r) => {
+    const which = [r.markings.crosswalk && 'crosswalk', r.markings.stopLine && 'stop line']
+      .filter(Boolean).join(' and ');
+    return {
+      severity: WARNING,
+      code: 'closed-road-end-markings',
+      message: `Road "${r.id}" is a closed loop, so its ${which} is not drawn or exported - `
+        + 'these sit at a road\'s end.',
+      entityIds: [r.id],
+    };
+  });
 }
 
 // --- assets outside canvas bounds (FR-21) -----------------------------------
@@ -174,6 +202,112 @@ function missingRefIssue(entity, missingVariantIds) {
       + `not found in the current manifest: ${missingVariantIds.join(', ')}.`,
     entityIds: [entity.id],
   };
+}
+
+// --- anything else the export file can't be written with (ERRORs) -----------
+// Document 2 makes the export standalone: each asset and material a layout
+// uses is copied into the file with a `source` and a `fallback` (§6, §12),
+// every scatter pool is listed in full (§10), and every entity has a unique
+// numeric `uid` (§7). These check each of those can be done. A reference the
+// manifest doesn't know at all is findMissingManifestReferences' to report,
+// so it is skipped here rather than reported twice.
+
+function findExportBlockers(project, manifest) {
+  if (!manifest) return []; // already one blocking 'no-manifest' error
+  return [
+    ...findAssetsWithoutExportDefinition(project, manifest),
+    ...findMaterialsWithoutExportDefinition(project, manifest),
+    ...findEmptyScatterPools(project, manifest),
+    ...findUnusableEntityIds(project),
+  ];
+}
+
+function findAssetsWithoutExportDefinition(project, manifest) {
+  const issues = [];
+  for (const { id, usedBy } of usedAssets(project, manifest)) {
+    const asset = manifest.byId(id);
+    if (!asset) continue;
+    const missing = [!asset.source && 'source', !asset.fallback && 'fallback'].filter(Boolean);
+    if (missing.length === 0) continue;
+    issues.push({
+      severity: ERROR,
+      code: 'missing-export-definition',
+      message: `Asset "${id}" has no ${missing.join(' or ')} in the manifest, so it cannot be exported `
+        + `(used by ${listIds(usedBy)}).`,
+      entityIds: usedBy,
+    });
+  }
+  return issues;
+}
+
+function findMaterialsWithoutExportDefinition(project, manifest) {
+  const issues = [];
+  for (const { id, kind, usedBy } of usedMaterials(project)) {
+    // An unlisted road surface is already a missing-manifest-reference.
+    if (kind === 'surface' && !manifest.hasSurface(id)) continue;
+    const material = manifest.material(id);
+    if (material && material.kind === kind) continue;
+    const users = usedBy.length > 0 ? listIds(usedBy) : 'the base slab';
+    issues.push({
+      severity: ERROR,
+      code: 'missing-export-definition',
+      message: material
+        ? `Material "${id}" is a ${material.kind} material in the manifest but is used as a ${kind} `
+          + `material, so it cannot be exported (used by ${users}).`
+        : `The manifest's materials have no ${kind} material "${id}", so it cannot be exported `
+          + `(used by ${users}).`,
+      entityIds: usedBy,
+    });
+  }
+  return issues;
+}
+
+function findEmptyScatterPools(project, manifest) {
+  return project.scatterRegions
+    .filter((r) => scatterVariantPool(r, manifest).length === 0)
+    .map((r) => ({
+      severity: ERROR,
+      code: 'scatter-empty-pool',
+      message: `Scatter region "${r.id}" has no assets to choose from - the manifest has none in the `
+        + `"${r.category}" category.`,
+      entityIds: [r.id],
+    }));
+}
+
+function findUnusableEntityIds(project) {
+  const issues = [];
+  const byUid = new Map();
+  for (const e of project.allEntities()) {
+    const uid = entityUid(e);
+    if (uid === null) {
+      issues.push({
+        severity: ERROR,
+        code: 'invalid-entity-id',
+        message: `${kindOf(e)} "${e.id}" has an id that does not end in a number, so it cannot be exported.`,
+        entityIds: [e.id],
+      });
+    } else {
+      if (!byUid.has(uid)) byUid.set(uid, []);
+      byUid.get(uid).push(e.id);
+    }
+  }
+  for (const [uid, ids] of byUid) {
+    if (ids.length < 2) continue;
+    issues.push({
+      severity: ERROR,
+      code: 'invalid-entity-id',
+      message: `${listIds(ids)} share the id number ${uid}, so they cannot be exported.`,
+      entityIds: ids,
+    });
+  }
+  return issues;
+}
+
+// 'a', 'a, b, c', 'a, b, c and 4 more' - keeps a message readable when
+// hundreds of entities use the same asset.
+function listIds(ids, max = 3) {
+  const shown = ids.slice(0, max).join(', ');
+  return ids.length > max ? `${shown} and ${ids.length - max} more` : shown;
 }
 
 // 'Building', 'Scatter region', ... - how messages name an entity's type.

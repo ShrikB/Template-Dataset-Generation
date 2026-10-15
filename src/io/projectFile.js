@@ -2,8 +2,8 @@
 // recovery (locked-in decision, CLAUDE.md).
 //
 // This is a DIFFERENT format from M6's export (src/io/exporter.js): export
-// produces the Blender-facing placeholder payload (a deliberately different,
-// lossy-by-design shape — see the note at the top of exporter.js); this file
+// produces the Blender-facing `city-layout` file (Document 2 - a deliberately
+// different, lossy-by-design shape in Blender's coordinates); this file
 // round-trips the editor's own full internal state so a layout can be closed
 // and resumed in THIS tool.
 //

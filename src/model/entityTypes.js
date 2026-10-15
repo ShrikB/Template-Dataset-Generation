@@ -75,6 +75,21 @@ export function categoryOf(entity) {
 }
 
 /**
+ * An entity's `uid` (Document 2 §7): the number at the end of its id
+ * ('bldg_12' -> 12), a positive integer. Every id the editor hands out comes
+ * from one counter shared by all entity types (Project#_id), so it is unique
+ * across the whole layout, not just within a type. Null when the id doesn't
+ * end in one - only possible for an id that didn't come from the editor (a
+ * hand-edited project file).
+ */
+export function entityUid(entity) {
+  const match = /_([1-9]\d*)$/.exec(typeof entity.id === 'string' ? entity.id : '');
+  if (!match) return null;
+  const uid = Number(match[1]);
+  return Number.isSafeInteger(uid) ? uid : null;
+}
+
+/**
  * A deep, independent copy of an entity. Every factory copies its nested
  * data (points, markings, footprint, variantIds), so rebuilding through it
  * is the clone - and re-validates the shape on the way.
